@@ -1,0 +1,8 @@
+name: LobbyParkour
+version: '${project.version}'
+main: com.etsuni.lobbyparkour.LobbyParkour
+api-version: 1.19
+depend: [WorldGuard]
+commands:
+  parkour:
+    description: Parkour command

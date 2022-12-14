@@ -1,0 +1,10 @@
+database:
+  uri:
+  database_name:
+  collection_name:
+
+parkour:
+  start:
+  checkpoints:
+    - 1 2 3
+  end:
