@@ -1,143 +1,124 @@
 package com.etsuni.lobbyparkour;
 
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldedit.util.Location;
-import com.sk89q.worldedit.world.World;
-import com.sk89q.worldguard.WorldGuard;
-import com.sk89q.worldguard.protection.ApplicableRegionSet;
-import com.sk89q.worldguard.protection.managers.RegionManager;
-import com.sk89q.worldguard.protection.regions.ProtectedRegion;
-import com.sk89q.worldguard.protection.regions.RegionContainer;
-import com.sk89q.worldguard.protection.regions.RegionQuery;
+import org.bson.Document;
 import org.bukkit.Bukkit;
-import org.bukkit.entity.Entity;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.scheduler.BukkitScheduler;
 
-import java.time.*;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static com.etsuni.lobbyparkour.LobbyParkour.plugin;
 
-public class Parkour implements Listener {
-    
-    private Map<Player, Integer> checkpoints;
-    private List<Player> playersInRegion;
-    private Map<Player, LocalDateTime> playersTime;
-    
-    public Parkour() {
-        checkpoints = new HashMap<>();
-        playersInRegion = new ArrayList<>();
-        playersTime = new HashMap<>();
+public class Parkour {
+
+    public LocalDateTime startTime;
+
+    public Location end;
+
+    public List<Location> checkpoints;
+
+    public int playerCheckPoint;
+
+    public int task = 0;
+
+    public Parkour(LocalDateTime startTime, Location end, List<Location> checkpoints) {
+        this.startTime = startTime;
+        this.end = end;
+        this.checkpoints = checkpoints;
+        this.playerCheckPoint = -1;
     }
 
-    @EventHandler
-    public void region(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        //LOOKUP WG MOVE TYPE, MIGHT MAKE THIS FASTER
+    public void start(Player player) {
+        BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
+        PlayersParkouring.getInstance().getPlayersTimes().put(player, startTime);
+        player.sendMessage(ChatColor.GREEN + "Parkour Started!");
 
-
-        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
-        org.bukkit.World realWorld = Bukkit.getWorld("world");
-        World world = BukkitAdapter.adapt(realWorld);
-        RegionManager regions = container.get(world);
-        ProtectedRegion region;
-
-        if(regions != null) {
-            region = regions.getRegion("Parkour");
-        } else {
-            return;
-        }
-
-        Location loc = BukkitAdapter.adapt(player.getLocation());
-        RegionQuery query = container.createQuery();
-        ApplicableRegionSet set = query.getApplicableRegions(loc);
-
-        for(ProtectedRegion reg : set) {
-            if(reg.equals(region)) {
-                if(playersInRegion.contains(player)) {
-                } else {
-                    playersInRegion.add(player);
-                    BoardManager bm = new BoardManager();
-                    player.setScoreboard(bm.parkourBoard());
-                }
-                return;
-            }
-        }
-        boolean removed = playersInRegion.remove(player);
-        if(removed) {
-            player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
-        }
-
-    }
-
-    @EventHandler
-    public void start(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        org.bukkit.Location location = player.getLocation().getBlock().getLocation();
-
-        if(playersTime.containsKey(player)) {
-            return;
-        }
-
-        if(location.equals(plugin.getCustomConfig().getLocation("parkour.start"))) {
-            LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-            playersTime.put(player, now);
-            player.sendMessage("Start time:" + now);
-        }
-    }
-
-    @EventHandler
-    public void end(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        org.bukkit.Location location = player.getLocation().getBlock().getLocation();
-
-        if(!playersTime.containsKey(player)){
-            return;
-        }
-
-        if(location.equals(plugin.getCustomConfig().getLocation("parkour.end"))) {
-            LocalDateTime start = playersTime.get(player);
-            LocalDateTime end = LocalDateTime.now(ZoneOffset.UTC);
-            long minutes = ChronoUnit.MINUTES.between(start, end);
-            long seconds = ChronoUnit.SECONDS.between(start, end);
-            long millis = ChronoUnit.MILLIS.between(start, end);
-            player.sendMessage("Your time was: "+minutes+"min "+seconds+"."+millis+"s");
-            playersTime.remove(player);
-            checkpoints.remove(player);
-        }
-    }
-
-    @EventHandler
-    public void checkpoint(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        org.bukkit.Location location = player.getLocation().getBlock().getLocation();
-        if(plugin.getCustomConfig().getList("parkour.checkpoints") == null) {
-            return;
-        }
-
-        for(Object loc : plugin.getCustomConfig().getList("parkour.checkpoints")) {
-            if(location.equals(loc)) {
-                if(checkpoints.containsKey(player)) {
-
-                    if(checkpoints.get(player) < plugin.getCustomConfig().getList("parkour.checkpoints").indexOf(loc)) {
-                        checkpoints.replace(player,
-                                plugin.getCustomConfig().getList("parkour.checkpoints").indexOf(loc));
-                        player.sendMessage("New Checkpoint!");
+        task = scheduler.scheduleSyncRepeatingTask(plugin, new Runnable() {
+            @Override
+            public void run() {
+                if(player.getLocation().getBlock().getLocation().equals(end)) {
+                    LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+                    long millis = ChronoUnit.MILLIS.between(startTime, now);
+                    long minutes = (millis / 1000) / 60;
+                    long seconds = (millis / 1000) % 60;
+                    long realMillis = millis % 1000;
+                    player.sendMessage(ChatColor.GOLD + "Parkour time: " +minutes+":" +seconds + "." + realMillis + "!");
+                    PlayersParkouring.getInstance().getPlayersTimes().remove(player);
+                    PlayersParkouring.getInstance().getCheckpoints().remove(player);
+                    personalBest(millis, player.getUniqueId().toString());
+                    scheduler.cancelTask(task);
+                } else if(checkpoints.contains(player.getLocation().getBlock().getLocation())) {
+                    int index = checkpoints.indexOf(player.getLocation().getBlock().getLocation());
+                    if(addCheckPoint(index)) {
+                        player.sendMessage("Reached checkpoint #" + (index + 1) +"!");
                     }
-
-                } else {
-                    checkpoints.put(player, 0);
-                    player.sendMessage("New Checkpoint!");
                 }
             }
+        },0,2);
+    }
+
+    public Boolean addCheckPoint(int index) {
+
+        if(playerCheckPoint > index) {
+            return false;
         }
+
+        if(playerCheckPoint < index) {
+            playerCheckPoint = index;
+            return true;
+        }
+
+        return false;
+    }
+
+    public void personalBest(long time, String uuid) {
+        playerInDB(uuid);
+        Document find = new Document("uuid", uuid);
+
+        if(find.putIfAbsent("pb", time) == null) {
+            return;
+        }
+
+        if(time < find.getLong("pb")) {
+            find.replace("pb", time);
+        }
+    }
+
+    public void playerInDB(String uuid) {
+        Document find = new Document("uuid", uuid);
+        if(plugin.getCollection().find(find).first() == null) {
+            plugin.getCollection().insertOne(find);
+        }
+    }
+
+    public LocalDateTime getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(LocalDateTime startTime) {
+        this.startTime = startTime;
+    }
+
+    public Location getEnd() {
+        return end;
+    }
+
+    public void setEnd(Location end) {
+        this.end = end;
+    }
+
+    public List<Location> getCheckpoints() {
+        return checkpoints;
+    }
+
+    public void setCheckpoints(List<Location> checkpoints) {
+        this.checkpoints = checkpoints;
     }
 }

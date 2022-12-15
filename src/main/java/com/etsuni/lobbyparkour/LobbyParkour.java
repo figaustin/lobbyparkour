@@ -28,11 +28,9 @@ public final class LobbyParkour extends JavaPlugin {
     private static final Logger log = Logger.getLogger("Minecraft");
 
     protected static LobbyParkour plugin;
-    Parkour parkour;
 
     @Override
     public void onEnable() {
-        parkour = new Parkour();
         plugin = this;
         createCustomConfig();
         if(!connect()) {
@@ -43,7 +41,7 @@ public final class LobbyParkour extends JavaPlugin {
             return;
         }
         this.getCommand("parkour").setExecutor(new Commands());
-        this.getServer().getPluginManager().registerEvents(parkour, this);
+        this.getServer().getPluginManager().registerEvents(new Events(), this);
     }
 
     @Override
