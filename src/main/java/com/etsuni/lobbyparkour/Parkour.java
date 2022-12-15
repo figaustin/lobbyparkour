@@ -1,6 +1,15 @@
 package com.etsuni.lobbyparkour;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.MongoException;
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoCursor;
+import com.mongodb.client.model.UpdateOptions;
+import com.mongodb.client.model.Updates;
+import com.mongodb.client.result.UpdateResult;
+import com.mongodb.internal.operation.UpdateOperation;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -53,6 +62,7 @@ public class Parkour {
                     PlayersParkouring.getInstance().getPlayersTimes().remove(player);
                     PlayersParkouring.getInstance().getCheckpoints().remove(player);
                     personalBest(millis, player.getUniqueId().toString());
+                    addToLeaderboard(millis);
                     scheduler.cancelTask(task);
                 } else if(checkpoints.contains(player.getLocation().getBlock().getLocation())) {
                     int index = checkpoints.indexOf(player.getLocation().getBlock().getLocation());
@@ -79,23 +89,45 @@ public class Parkour {
     }
 
     public void personalBest(long time, String uuid) {
-        playerInDB(uuid);
-        Document find = new Document("uuid", uuid);
 
-        if(find.putIfAbsent("pb", time) == null) {
-            return;
-        }
-
-        if(time < find.getLong("pb")) {
-            find.replace("pb", time);
-        }
-    }
-
-    public void playerInDB(String uuid) {
         Document find = new Document("uuid", uuid);
         if(plugin.getCollection().find(find).first() == null) {
             plugin.getCollection().insertOne(find);
         }
+
+            Bson updates = Updates.combine(Updates.min("pb", time));
+            UpdateOptions options = new UpdateOptions().upsert(true);
+
+            try {
+                UpdateResult result = plugin.getCollection().updateOne(find, updates, options);
+            } catch (MongoException me) {
+                me.printStackTrace();
+            }
+    }
+
+
+    public void addToLeaderboard(long time) {
+        List<Long> leaderboard = new ArrayList<>();
+        Document find = new Document("leaderboardOBJ", "obj");
+
+        MongoCursor<Document> cursor = plugin.getCollection().find(find).iterator();
+
+        try{
+            while(cursor.hasNext()) {
+                Document str = cursor.next();
+
+                List<Document> list = (List<Document>) str.get("leaderboard");
+                for(int i = 0; i < list.size(); i++) {
+                    leaderboard.add(list.get(i).getLong("time"));
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+        BasicDBObject entries = new BasicDBObject("leaderboard", leaderboard);
+        BasicDBObject update = new BasicDBObject("$push", entries);
+        plugin.getCollection().updateOne(find, update);
+
     }
 
     public LocalDateTime getStartTime() {

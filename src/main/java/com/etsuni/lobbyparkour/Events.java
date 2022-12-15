@@ -77,7 +77,7 @@ public class Events implements Listener {
                 } else {
                     playersInRegion.add(player);
                     BoardManager bm = new BoardManager();
-                    player.setScoreboard(bm.parkourBoard());
+                    player.setScoreboard(bm.parkourBoard(player));
                 }
                 return;
             }
