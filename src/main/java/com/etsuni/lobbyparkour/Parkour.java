@@ -65,7 +65,7 @@ public class Parkour {
                     BoardManager bm = new BoardManager();
                     player.setScoreboard(bm.parkourBoard(player));
                     scheduler.cancelTask(task);
-                } else if(checkpoints.contains(player.getLocation().getBlock().getLocation())) {
+                } else if(checkpoints != null && checkpoints.contains(player.getLocation().getBlock().getLocation())) {
                     int index = checkpoints.indexOf(player.getLocation().getBlock().getLocation());
                     if(addCheckPoint(player, index)) {
                         player.sendMessage("Reached checkpoint #" + (index + 1) +"!");
