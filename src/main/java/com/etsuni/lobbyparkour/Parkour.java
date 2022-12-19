@@ -1,26 +1,18 @@
 package com.etsuni.lobbyparkour;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.MongoException;
-import com.mongodb.client.FindIterable;
-import com.mongodb.client.MongoCursor;
-import com.mongodb.client.model.UpdateOptions;
-import com.mongodb.client.model.Updates;
-import com.mongodb.client.result.UpdateResult;
-import com.mongodb.internal.operation.UpdateOperation;
 import org.bson.Document;
-import org.bson.conversions.Bson;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitScheduler;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 
 import static com.etsuni.lobbyparkour.LobbyParkour.plugin;
@@ -48,6 +40,11 @@ public class Parkour {
         BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
         PlayersParkouring.getInstance().getPlayersTimes().put(player, startTime);
         player.sendMessage(ChatColor.GREEN + "Parkour Started!");
+        ItemStack item = new ItemStack(Material.GLOWSTONE_DUST);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.GREEN + "Return To Checkpoint (Right Click)");
+        item.setItemMeta(meta);
+        player.getInventory().addItem(item);
 
         task = scheduler.scheduleSyncRepeatingTask(plugin, new Runnable() {
             @Override
@@ -61,20 +58,24 @@ public class Parkour {
                     player.sendMessage(ChatColor.GOLD + "Parkour time: " +minutes+":" +seconds + "." + realMillis + "!");
                     PlayersParkouring.getInstance().getPlayersTimes().remove(player);
                     PlayersParkouring.getInstance().getCheckpoints().remove(player);
-                    personalBest(millis, player.getUniqueId().toString());
-                    addToLeaderboard(millis);
+
+                    addTime(player.getUniqueId().toString(), millis);
+                    player.getInventory().remove(item);
+//                    player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
+                    BoardManager bm = new BoardManager();
+                    player.setScoreboard(bm.parkourBoard(player));
                     scheduler.cancelTask(task);
                 } else if(checkpoints.contains(player.getLocation().getBlock().getLocation())) {
                     int index = checkpoints.indexOf(player.getLocation().getBlock().getLocation());
-                    if(addCheckPoint(index)) {
+                    if(addCheckPoint(player, index)) {
                         player.sendMessage("Reached checkpoint #" + (index + 1) +"!");
                     }
                 }
             }
-        },0,2);
+        },0,0);
     }
 
-    public Boolean addCheckPoint(int index) {
+    public Boolean addCheckPoint(Player player, int index) {
 
         if(playerCheckPoint > index) {
             return false;
@@ -82,75 +83,22 @@ public class Parkour {
 
         if(playerCheckPoint < index) {
             playerCheckPoint = index;
+            if(!PlayersParkouring.getInstance().getCheckpoints().containsKey(player)) {
+                PlayersParkouring.getInstance().getCheckpoints().put(player, index);
+            } else {
+                PlayersParkouring.getInstance().getCheckpoints().replace(player, index);
+            }
+
             return true;
         }
 
         return false;
     }
 
-    public void personalBest(long time, String uuid) {
+    public void addTime(String uuid, long time) {
 
-        Document find = new Document("uuid", uuid);
-        if(plugin.getCollection().find(find).first() == null) {
-            plugin.getCollection().insertOne(find);
-        }
-
-            Bson updates = Updates.combine(Updates.min("pb", time));
-            UpdateOptions options = new UpdateOptions().upsert(true);
-
-            try {
-                UpdateResult result = plugin.getCollection().updateOne(find, updates, options);
-            } catch (MongoException me) {
-                me.printStackTrace();
-            }
+        Document playerTime = new Document("uuid", uuid).append("time", time);
+        plugin.getCollection().insertOne(playerTime);
     }
 
-
-    public void addToLeaderboard(long time) {
-        List<Long> leaderboard = new ArrayList<>();
-        Document find = new Document("leaderboardOBJ", "obj");
-
-        MongoCursor<Document> cursor = plugin.getCollection().find(find).iterator();
-
-        try{
-            while(cursor.hasNext()) {
-                Document str = cursor.next();
-
-                List<Document> list = (List<Document>) str.get("leaderboard");
-                for(int i = 0; i < list.size(); i++) {
-                    leaderboard.add(list.get(i).getLong("time"));
-                }
-            }
-        } finally {
-            cursor.close();
-        }
-        BasicDBObject entries = new BasicDBObject("leaderboard", leaderboard);
-        BasicDBObject update = new BasicDBObject("$push", entries);
-        plugin.getCollection().updateOne(find, update);
-
-    }
-
-    public LocalDateTime getStartTime() {
-        return startTime;
-    }
-
-    public void setStartTime(LocalDateTime startTime) {
-        this.startTime = startTime;
-    }
-
-    public Location getEnd() {
-        return end;
-    }
-
-    public void setEnd(Location end) {
-        this.end = end;
-    }
-
-    public List<Location> getCheckpoints() {
-        return checkpoints;
-    }
-
-    public void setCheckpoints(List<Location> checkpoints) {
-        this.checkpoints = checkpoints;
-    }
 }

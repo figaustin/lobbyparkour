@@ -1,18 +1,15 @@
 package com.etsuni.lobbyparkour;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.client.FindIterable;
-import com.mongodb.client.MongoCursor;
-import com.mongodb.client.model.Filters;
-import com.mongodb.client.model.Projections;
 import org.bson.Document;
-import org.bson.conversions.Bson;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.*;
 
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static com.etsuni.lobbyparkour.LobbyParkour.plugin;
@@ -28,64 +25,79 @@ public class BoardManager {
 
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
         Score score = obj.getScore(ChatColor.AQUA + "=-=-=-=-=-=-=-=-=-=-=-=");
-        score.setScore(13);
+        score.setScore(14);
         Score score2 = obj.getScore(getPB(player.getUniqueId().toString()));
-        score2.setScore(12);
+        score2.setScore(13);
         Score empty = obj.getScore(" ");
-        empty.setScore(11);
+        empty.setScore(12);
         Score best = obj.getScore(ChatColor.GREEN + "Leaderboard:");
-        best.setScore(10);
+        best.setScore(11);
 
-        List<Long> leaderboard = getLeaderboard();
-        for(int i = leaderboard.size() - 1; i >= 0; i--) {
-            long minutes = (leaderboard.get(i) / 1000) / 60;
-            long seconds = (leaderboard.get(i) / 1000) % 60;
-            long realMillis = leaderboard.get(i) % 1000;
-            Score newScore = obj.getScore(ChatColor.GOLD + "" + minutes+":" +seconds + "." + realMillis);
-            newScore.setScore(i);
+        List<Long> leaderboard = getLeaderboard() == null ? new ArrayList<>(): getLeaderboard();
+        leaderboard.sort(Collections.reverseOrder());
+        if(!leaderboard.isEmpty()) {
+            for(int i = leaderboard.size() - 1; i >= 0; i--) {
+                long minutes = (leaderboard.get(i) / 1000) / 60;
+                long seconds = (leaderboard.get(i) / 1000) % 60;
+                long realMillis = leaderboard.get(i) % 1000;
+                Score newScore = obj.getScore(ChatColor.GOLD + "- " + minutes+":" +seconds + "." + realMillis);
+                newScore.setScore(i);
+
+            }
         }
+
         return scoreboard;
     }
 
     public String getPB(String uuid) {
-        Document find = new Document("uuid", uuid);
-        FindIterable<Document> finds = plugin.getCollection().find(find);
-        if(finds.first() == null) {
-            return "";
-        }
-        long millis = 123456789;
+
+        List<Long> entries = new ArrayList<>();
+        BasicDBObject query = new BasicDBObject();
+        query.put("uuid", uuid);
+        FindIterable<Document> finds = plugin.getCollection().find(query);
 
         for(Document document : finds) {
-            millis = document.getLong("pb");
+            entries.add(document.getLong("time"));
         }
 
+        Collections.sort(entries);
 
-        long minutes = (millis / 1000) / 60;
-        long seconds = (millis / 1000) % 60;
-        long realMillis = millis % 1000;
+        long minutes = 0;
+        long seconds = 0;
+        long realMillis = 0;
+        if(entries.size() > 0 && entries.get(0) != null) {
+            minutes = ( entries.get(0) / 1000) / 60;
+            seconds = ( entries.get(0) / 1000) % 60;
+            realMillis = entries.get(0) % 1000;
+        }
+
 
         return ChatColor.GOLD + "Your PB:    " + minutes+":" +seconds + "." + realMillis;
     }
 
     public List<Long> getLeaderboard() {
         List<Long> leaderboard = new ArrayList<>();
-        Document find = new Document("leaderboardOBJ", "obj");
+        List<Long> entries = new ArrayList<>();
+        BasicDBObject query = new BasicDBObject();
 
-        MongoCursor<Document> cursor = plugin.getCollection().find(find).iterator();
-
-        try{
-            while(cursor.hasNext()) {
-                Document str = cursor.next();
-
-                List<Document> list = (List<Document>) str.get("leaderboard");
-                for(int i = 0; i < list.size(); i++) {
-                    leaderboard.add(list.get(i).getLong("time"));
-                }
-            }
-        } finally {
-            cursor.close();
+        query.put("time", 1);
+        FindIterable<Document> finds = plugin.getCollection().find();
+        if(finds.first() == null) {
+            return null;
+        }
+        for(Document document : finds) {
+            entries.add(document.getLong("time"));
         }
 
+        Collections.sort(entries);
+        int LEADERBOARD_SIZE = 10;
+        for(int i = 0; i <= LEADERBOARD_SIZE - 1; i++) {
+            if(entries.size() > i) {
+                leaderboard.add(entries.get(i));
+            } else {
+                break;
+            }
+        }
 
         return leaderboard;
     }

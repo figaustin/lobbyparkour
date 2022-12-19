@@ -68,6 +68,14 @@ public final class LobbyParkour extends JavaPlugin {
         mongoClient = MongoClients.create(uri);
         database = mongoClient.getDatabase(databaseName);
         collection = database.getCollection(collectionName);
+        try {
+            database.createCollection(collectionName);
+            log.info(String.format("[%s] - Created collection", getDescription().getName()));
+        } catch (Exception e) {
+            log.info(String.format("[%s] - Found collection", getDescription().getName()));
+
+        }
+
         return true;
     }
 

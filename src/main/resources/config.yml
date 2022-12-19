@@ -6,5 +6,4 @@ database:
 parkour:
   start:
   checkpoints:
-    - 1 2 3
   end:
